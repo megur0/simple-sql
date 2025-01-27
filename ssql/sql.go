@@ -43,10 +43,9 @@ var forceNowaitOnLockingRead = true
 // UPDATE文の際は"updated_at"が含まれている事を強制する
 var forceUpdatedAtCheck = true
 
-func isDebugMode() bool {
+func IsDebugMode() bool {
 	if Mode == MODE_PRODUCTION {
 		return false
-
 	} else if Mode == MODE_DEBUG {
 		return true
 	} else {
@@ -211,7 +210,7 @@ func Query[M any](tx HasQuery, mp *M, query string, args ...any) ([]M, error) {
 	}
 
 	// デバッグモードの場合はExplainによるチェックを行う
-	if isDebugMode() && !CheckSeqScan(query, args...) {
+	if IsDebugMode() && !CheckSeqScan(query, args...) {
 		panic(fmt.Sprintf(PanicSQLIsSeqScan, query))
 	}
 
@@ -224,7 +223,7 @@ func CheckSeqScan(query string, args ...any) bool {
 		return true
 	}
 
-	if !isDebugMode() {
+	if !IsDebugMode() {
 		panic("not use this function without debug mode")
 	}
 	tx, err := DB.Begin()
@@ -439,7 +438,7 @@ func Exec(tx HasExec, query string, args ...any) (sql.Result, error) {
 	}
 
 	// デバッグモードの場合はExplainによるチェックを行う
-	if isDebugMode() && !CheckSeqScan(query, args...) {
+	if IsDebugMode() && !CheckSeqScan(query, args...) {
 		panic(fmt.Sprintf(PanicSQLIsSeqScan, query))
 	}
 

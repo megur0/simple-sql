@@ -824,7 +824,7 @@ func openDB(dbHost, dbUser, dbPassword string, dbPort int, mode string) {
 
 // テスト用のDBリフレッシュ
 func dbRefresh(tables []string) {
-	if !isDebugMode() {
+	if !IsDebugMode() {
 		panic("db refresh only use at test")
 	}
 
@@ -841,7 +841,7 @@ func closeDB() {
 }
 
 func stats() {
-	if isDebugMode() {
+	if IsDebugMode() {
 		l.Debug(context.Background(), fmt.Sprintf("%+v", DB.Stats()))
 	}
 }
