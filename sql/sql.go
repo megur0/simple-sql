@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-var Db *sql.DB
+var DB *sql.DB
 
 var Mode = MODE_DEBUG
 
@@ -123,7 +123,7 @@ func Query[M any](tx HasQuery, mp *M, query string, args ...any) ([]M, error) {
 	}
 
 	if tx == nil {
-		tx = Db
+		tx = DB
 	}
 
 	rows, err := tx.Query(query, args...)
@@ -227,7 +227,7 @@ func CheckSeqScan(query string, args ...any) bool {
 	if !isDebugMode() {
 		panic("not use this function without debug mode")
 	}
-	tx, err := Db.Begin()
+	tx, err := DB.Begin()
 
 	if err != nil {
 		panic(err)
@@ -427,7 +427,7 @@ func Exec(tx HasExec, query string, args ...any) (sql.Result, error) {
 	}
 
 	if tx == nil {
-		tx = Db
+		tx = DB
 	}
 
 	result, err := tx.Exec(query, args...)
@@ -468,7 +468,7 @@ func isAssumedSQLError(err error) error {
 //
 // 今のところトランザクションのネストは想定していないので、txの引数は取っていない。
 func Transaction(c context.Context, f func(*sql.Tx) error) error {
-	tx, err := Db.Begin()
+	tx, err := DB.Begin()
 	if err != nil {
 		panic(err)
 	}

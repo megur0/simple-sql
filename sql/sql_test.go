@@ -45,7 +45,7 @@ func openTestDB() {
 // env `cat .env` go test -v -count=1 -timeout 60s ./sql
 func TestMain(m *testing.M) {
 	openTestDB()
-	defer Db.Close()
+	defer DB.Close()
 
 	m.Run()
 }
@@ -813,7 +813,7 @@ func openDB(dbHost, dbUser, dbPassword string, dbPort int, mode string) {
 	Mode = mode
 
 	var err error
-	Db, err = sql.Open("pgx", fmt.Sprintf(
+	DB, err = sql.Open("pgx", fmt.Sprintf(
 		"user=%s password=%s host=%s port=%d dbname=%s sslmode=disable",
 		dbUser, dbPassword, dbHost, dbPort, "test_db",
 	))
@@ -829,7 +829,7 @@ func dbRefresh(tables []string) {
 	}
 
 	// SEQUENCEは利用していないが、一応リセットしている(RESTART IDENTITY)
-	_, err := Db.Exec("TRUNCATE " + strings.Join(tables, ",") + " RESTART IDENTITY")
+	_, err := DB.Exec("TRUNCATE " + strings.Join(tables, ",") + " RESTART IDENTITY")
 
 	if err != nil {
 		panic(err)
@@ -837,12 +837,12 @@ func dbRefresh(tables []string) {
 }
 
 func closeDB() {
-	Db.Close()
+	DB.Close()
 }
 
 func stats() {
 	if isDebugMode() {
-		l.Debug(context.Background(), fmt.Sprintf("%+v", Db.Stats()))
+		l.Debug(context.Background(), fmt.Sprintf("%+v", DB.Stats()))
 	}
 }
 
