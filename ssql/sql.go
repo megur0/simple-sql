@@ -23,25 +23,25 @@ const (
 
 // デバッグモードの際にSQLのExpalinをチェックして"Seq Scan"を含む場合にpanicとさせる。
 // これを利用することでインデックスの設定漏れを回避できる。
-var useSeqScanCheck = true
+var UseSeqScanCheck = true
 
 // Seq Scanのチェックを個別に外したい場合は、以下のようにする。
 // WHERE 'seq scan check disable'='seq scan check disable' AND (以降条件文)
-const seqScanCheckDisableClause = "seq scan check disable"
+const SeqScanCheckDisableClause = "seq scan check disable"
 
 // デバッグモードの際にWHEREが含まれない検索をpanicとさせる。
 // これによってデータの全検索を回避する。
-var useWhereCheck = true
+var UseWhereCheck = true
 
 // WHEREのチェックを個別に外したい場合は、以下のようにする。
 // WHERE 'where check disable'='where check disable' AND (以降条件文)
-const disableWhereCheckClause = "where check disable"
+const DisableWhereCheckClause = "where check disable"
 
 // FOR SELECTやFOR UPDATEの際はNOWAITが付与されている事を矯正する
-var forceNowaitOnLockingRead = true
+var ForceNowaitOnLockingRead = true
 
 // UPDATE文の際は"updated_at"が含まれている事を強制する
-var forceUpdatedAtCheck = true
+var ForceUpdatedAtCheck = true
 
 func IsDebugMode() bool {
 	if Mode == MODE_PRODUCTION {
@@ -113,11 +113,11 @@ func Query[M any](tx HasQuery, mp *M, query string, args ...any) ([]M, error) {
 		panic(PanicQueryNotContanSelect)
 	}
 
-	if useWhereCheck && !StrContainWithIgnoreCase(query, " WHERE ") && !StrContainWithIgnoreCase(query, disableWhereCheckClause) {
+	if UseWhereCheck && !StrContainWithIgnoreCase(query, " WHERE ") && !StrContainWithIgnoreCase(query, DisableWhereCheckClause) {
 		panic(PanicSelectSQLMustUseWhere)
 	}
 
-	if forceNowaitOnLockingRead && (StrContainWithIgnoreCase(query, " FOR SELECT") || StrContainWithIgnoreCase(query, " FOR UPDATE")) && !StrContainWithIgnoreCase(query, " NOWAIT") {
+	if ForceNowaitOnLockingRead && (StrContainWithIgnoreCase(query, " FOR SELECT") || StrContainWithIgnoreCase(query, " FOR UPDATE")) && !StrContainWithIgnoreCase(query, " NOWAIT") {
 		panic(PanicLockingReadMustUseNowait)
 	}
 
@@ -219,7 +219,7 @@ func Query[M any](tx HasQuery, mp *M, query string, args ...any) ([]M, error) {
 
 // "Seq Scan"のSQLが存在する場合はただちにpanicで処理を止めて出力。
 func CheckSeqScan(query string, args ...any) bool {
-	if !useSeqScanCheck || StrContainWithIgnoreCase(query, seqScanCheckDisableClause) {
+	if !UseSeqScanCheck || StrContainWithIgnoreCase(query, SeqScanCheckDisableClause) {
 		return true
 	}
 
@@ -412,15 +412,15 @@ func Exec(tx HasExec, query string, args ...any) (sql.Result, error) {
 		panic(PanicPlaceHolderNumberNotMatch)
 	}
 
-	if useWhereCheck && StrContainWithIgnoreCase(query, "DELETE ") && !StrContainWithIgnoreCase(query, " WHERE ") && !StrContainWithIgnoreCase(query, disableWhereCheckClause) {
+	if UseWhereCheck && StrContainWithIgnoreCase(query, "DELETE ") && !StrContainWithIgnoreCase(query, " WHERE ") && !StrContainWithIgnoreCase(query, DisableWhereCheckClause) {
 		panic(PanicDeleteSQLMustUseWhere)
 	}
 
 	if StrContainWithIgnoreCase(query, "UPDATE ") {
-		if useWhereCheck && !StrContainWithIgnoreCase(query, " WHERE ") && !StrContainWithIgnoreCase(query, disableWhereCheckClause) {
+		if UseWhereCheck && !StrContainWithIgnoreCase(query, " WHERE ") && !StrContainWithIgnoreCase(query, DisableWhereCheckClause) {
 			panic(PanicUpdateSQLMustUseWhere)
 		}
-		if forceUpdatedAtCheck && !StrContainWithIgnoreCase(query, "updated_at") {
+		if ForceUpdatedAtCheck && !StrContainWithIgnoreCase(query, "updated_at") {
 			panic(PanicUpdateSQLMustHaveUpdatedAt)
 		}
 	}

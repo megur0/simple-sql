@@ -707,7 +707,7 @@ func TestIsNotSeqScanSQL(t *testing.T) {
 	})
 
 	t.Run("IsNotSeqScanSQ", func(t *testing.T) {
-		testutil.AssertTrue(t, CheckSeqScan("SELECT name FROM table_for_test WHERE '"+seqScanCheckDisableClause+"' = '"+seqScanCheckDisableClause+"'"))
+		testutil.AssertTrue(t, CheckSeqScan("SELECT name FROM table_for_test WHERE '"+SeqScanCheckDisableClause+"' = '"+SeqScanCheckDisableClause+"'"))
 		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = $1", "aaaaa"))
 		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1)", "aaaaa"))
 		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1))", "aaaaa"))
