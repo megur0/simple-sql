@@ -1,4 +1,4 @@
-package sql
+package ssql
 
 import "strings"
 
