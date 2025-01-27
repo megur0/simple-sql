@@ -1,5 +1,6 @@
 # シンプルなSQL処理
-* database/sqlのラッパーパッケージ
+* database/sqlのQueryやExecのラッパー
+    * database/sqlと合わせて利用する
 * 現時点ではPostgreSQLのみ対応
 
 # 特徴
