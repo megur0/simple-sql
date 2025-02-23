@@ -42,7 +42,7 @@ func openTestDB() {
 	openDB(os.Getenv("TEST_DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), testutil.GetFirst(strconv.Atoi(os.Getenv("DB_PORT_EXPOSE"))), MODE_DEBUG)
 }
 
-// env `cat .env` go test -v -count=1 -timeout 60s ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s ./ssql
 func TestMain(m *testing.M) {
 	openTestDB()
 	defer DB.Close()
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestDB$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestDB$ ./ssql
 func TestDB(t *testing.T) {
 	t.Run("success_db_open_stats_close", func(t *testing.T) {
 		closeDB()
@@ -59,7 +59,7 @@ func TestDB(t *testing.T) {
 	})
 }
 
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestSQL$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestSQL$ ./ssql
 func TestSQL(t *testing.T) {
 	refreshDB()
 
@@ -111,7 +111,7 @@ func TestSQL(t *testing.T) {
 }
 
 // ユニーク制約エラーのハンドリング
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestUniqError$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestUniqError$ ./ssql
 func TestUniqError(t *testing.T) {
 	refreshDB()
 
@@ -133,7 +133,7 @@ func TestUniqError(t *testing.T) {
 }
 
 // トランザクションブロックにおけるユニーク制約エラー
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestUniqErrorAtCommit$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestUniqErrorAtCommit$ ./ssql
 func TestUniqErrorAtCommit(t *testing.T) {
 	refreshDB()
 
@@ -147,7 +147,7 @@ func TestUniqErrorAtCommit(t *testing.T) {
 		wg.Add(1)
 		var err error
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				re, err := Exec(tx, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaaaa", uid)
 				row, _ := re.RowsAffected()
 				testutil.AssertEqual(t, err, nil)
@@ -168,7 +168,7 @@ func TestUniqErrorAtCommit(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				var u []TableForTest
 
 				<-syn1 //１つ目のスレッドがinsertをするまで待つ。
@@ -207,7 +207,7 @@ func TestUniqErrorAtCommit(t *testing.T) {
 }
 
 // panicが発生した時にロックが開放されることの確認。
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestPanicLock$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestPanicLock$ ./ssql
 func TestPanicLock(t *testing.T) {
 	refreshDB()
 
@@ -233,7 +233,7 @@ func TestPanicLock(t *testing.T) {
 
 				wg.Done()
 			}()
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				var p []TableForTest
 				p, err = Query(tx, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1 FOR UPDATE NOWAIT", uid)
 				testutil.AssertEqual(t, err, nil)
@@ -245,7 +245,7 @@ func TestPanicLock(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				<-syn1 //１つ目のスレッドがロックをかけるまで待つ。
 				d("g2 syn1 recieved")
 
@@ -266,7 +266,7 @@ func TestPanicLock(t *testing.T) {
 }
 
 // ユニーク制約によるデッドロック。
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestDeadLock$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestDeadLock$ ./ssql
 func TestDeadLock(t *testing.T) {
 	refreshDB()
 
@@ -281,7 +281,7 @@ func TestDeadLock(t *testing.T) {
 		wg.Add(1)
 		var err1 error
 		go func() {
-			err1 = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err1 = Transaction(func(tx *sql.Tx) error {
 				Exec(tx, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaa", uid1)
 
 				syn1 <- struct{}{} // insertが終わったら2つ目のスレッドへ知らせる。
@@ -308,7 +308,7 @@ func TestDeadLock(t *testing.T) {
 		wg.Add(1)
 		var err2 error
 		go func() {
-			err2 = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err2 = Transaction(func(tx *sql.Tx) error {
 
 				<-syn1 //１つ目のスレッドがinsertをするまで待つ。
 				d("g2 syn1 recieved")
@@ -343,7 +343,7 @@ func TestDeadLock(t *testing.T) {
 }
 
 // トランザクションブロックにおける行ロック待ちの検証
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestLockWaitAtSameRow$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestLockWaitAtSameRow$ ./ssql
 func TestLockWaitAtSameRow(t *testing.T) {
 	refreshDB()
 	uid := "aa"
@@ -358,7 +358,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 		var err error
 		check := 0
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				_, err = Exec(tx, "UPDATE table_for_test SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
 				testutil.AssertEqual(t, err, nil)
 
@@ -377,7 +377,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				<-syn1 //１つ目のスレッドがupdateをするまで待つ。
 				d("g2 syn1 recieved")
 
@@ -417,7 +417,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 		var err error
 		check := 0
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				_, err = Exec(tx, "UPDATE table_for_test SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
 				testutil.AssertEqual(t, err, nil)
 
@@ -436,7 +436,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				<-syn1 //１つ目のスレッドがupdateをするまで待つ。
 				d("g2 syn1 recieved")
 
@@ -471,7 +471,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 		var err error
 		check := 0
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				_, err = Exec(tx, "UPDATE table_for_test SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
 				testutil.AssertEqual(t, err, nil)
 
@@ -490,7 +490,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 
 		wg.Add(1)
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				<-syn1 //１つ目のスレッドがupdateをするまで待つ。
 				d("g2 syn1 recieved")
 
@@ -519,7 +519,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 }
 
 // ロッキングリードでのエラーハンドリングの確認
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestLockError$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestLockError$ ./ssql
 func TestLockError(t *testing.T) {
 	refreshDB()
 
@@ -535,7 +535,7 @@ func TestLockError(t *testing.T) {
 		wg.Add(1)
 		var err error
 		go func() {
-			err = Transaction(context.Background(), func(tx *sql.Tx) error {
+			err = Transaction(func(tx *sql.Tx) error {
 				_, err := Query(tx, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1 FOR UPDATE NOWAIT", "a")
 				if err != nil {
 					return err
@@ -548,7 +548,7 @@ func TestLockError(t *testing.T) {
 		}()
 		testutil.AssertEqual(t, err, nil)
 
-		err = Transaction(context.Background(), func(tx *sql.Tx) error {
+		err = Transaction(func(tx *sql.Tx) error {
 			<-syn1
 			_, err := QueryFirst(tx, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1 FOR UPDATE NOWAIT", "a")
 			if err != nil {
@@ -564,7 +564,7 @@ func TestLockError(t *testing.T) {
 }
 
 // プレースホルダーの不正、SQLインジェクション、Whereを含まないdelete、他
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestInvalidSQL$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestInvalidSQL$ ./ssql
 func TestInvalidSQL(t *testing.T) {
 	refreshDB()
 
@@ -663,7 +663,7 @@ func TestInvalidSQL(t *testing.T) {
 
 }
 
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestColumnConstraint$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestColumnConstraint$ ./ssql
 func TestColumnConstraint(t *testing.T) {
 	refreshDB()
 	t.Run("ok_length_varchar", func(t *testing.T) {
@@ -690,7 +690,7 @@ func TestColumnConstraint(t *testing.T) {
 	})
 }
 
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestIsNotSeqScanSQL$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestIsNotSeqScanSQL$ ./ssql
 func TestIsNotSeqScanSQL(t *testing.T) {
 	t.Run("panic_IsNotSeqScanSQL", func(t *testing.T) {
 		var r interface{}
@@ -722,7 +722,7 @@ func TestIsNotSeqScanSQL(t *testing.T) {
 	})
 }
 
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestContainStr$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestContainStr$ ./ssql
 func TestContainStr(t *testing.T) {
 	for _, d := range []struct {
 		target string
@@ -793,7 +793,7 @@ func TestContainStr(t *testing.T) {
 	})
 }
 
-// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestLog$ ./sql
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestLog$ ./ssql
 func TestLog(t *testing.T) {
 	l.Debug(context.Background(), "test %s", "test")
 	l.Info(context.Background(), "test %s", "test")
