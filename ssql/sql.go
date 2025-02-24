@@ -1,6 +1,7 @@
 package ssql
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -60,14 +61,14 @@ type HasExec interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
-func doAndRecover(tx *sql.Tx, f func(*sql.Tx) error) error {
+func doAndRecover(c context.Context, tx *sql.Tx, f func(*sql.Tx) error) error {
 	defer func() {
 		if r := recover(); r != nil {
-			l.Warn("rollback start because panic occured")
+			l.Warn(c, "rollback start because panic occured")
 			if err := tx.Rollback(); err != nil {
 				panic(err)
 			}
-			l.Warn("rollback end")
+			l.Warn(c, "rollback end")
 
 			// panicのスタックトレース情報を最終的に出力させたいので引き継ぐ。
 			panic(r)
@@ -465,12 +466,12 @@ func isAssumedSQLError(err error) error {
 // (この関数自体の処理によって発生するエラーは無く、それらは全てpanicとなる)
 //
 // 今のところトランザクションのネストは想定していないので、txの引数は取っていない。
-func Transaction(f func(*sql.Tx) error) error {
+func Transaction(c context.Context, f func(*sql.Tx) error) error {
 	tx, err := DB.Begin()
 	if err != nil {
 		panic(err)
 	}
-	if err := doAndRecover(tx, f); err != nil {
+	if err := doAndRecover(c, tx, f); err != nil {
 		// doAndRecover内で「f」の実行時にpanicが発生した場合は、
 		// doAndRecover内でロールバックした上で、panicにしている。
 		// その場合、（panicの仕様通り）以降の処理は実行されずpanicが呼び出し元へと伝搬していく。
@@ -478,14 +479,14 @@ func Transaction(f func(*sql.Tx) error) error {
 		// もしdoAndRecoverでこのrecover処理（ロールバック）を実行しない場合の問題として、
 		// Go側の処理はpanicとして終了する一方、DB側ではトランザクションが仕掛り状態のまま残ってしまう。
 		// つまりロックを取得している際は、そのロックが開放されず他のトランザクションへ影響が出てしまう。
-		l.Info("rollback start")
+		l.Info(c, "rollback start")
 		// ロールバックに失敗するケースとして、考えられるのは、
 		// ネットワークエラーやDB自体が停止している等。いずれにしても
 		// 更新内容は消失する可能性が高い。（原子性が担保されていれば許容はできる）
 		if err := tx.Rollback(); err != nil {
 			panic(err)
 		}
-		l.Info("rollback end")
+		l.Info(c, "rollback end")
 		return err
 	}
 
