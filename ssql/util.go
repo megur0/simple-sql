@@ -14,3 +14,7 @@ func StrContainListWithIgnoreCase(target string, str ...string) bool {
 	}
 	return false
 }
+
+func Ptr[T any](a T) *T {
+	return &a
+}

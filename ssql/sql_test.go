@@ -64,21 +64,21 @@ func TestSQL(t *testing.T) {
 	refreshDB()
 
 	t.Run("success_select_where", func(t *testing.T) {
-		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE id=$1", "69e00805-dbc9-4a12-b43f-65b0fd6c5023")
+		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE id=$1", "69e00805-dbc9-4a12-b43f-65b0fd6c5023")
 		if err != nil {
 			t.Error("got error")
 		}
 	})
 
 	t.Run("success_select_where_any", func(t *testing.T) {
-		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE id = Any($1)", []string{"69e00805-dbc9-4a12-b43f-65b0fd6c5023", "69e00805-dbc9-4a12-b43f-65b0fd6c5023"})
+		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE id = Any($1)", []string{"69e00805-dbc9-4a12-b43f-65b0fd6c5023", "69e00805-dbc9-4a12-b43f-65b0fd6c5023"})
 		if err != nil {
 			t.Error("got error")
 		}
 	})
 
 	t.Run("success_insert", func(t *testing.T) {
-		result, err := Exec(nil, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaaaa", "a")
+		result, err := Exec(nil, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aaaaaa", "a")
 		if err != nil {
 			t.Fatal("got error")
 		}
@@ -89,7 +89,7 @@ func TestSQL(t *testing.T) {
 	})
 
 	t.Run("success_update", func(t *testing.T) {
-		result, err := Exec(nil, "UPDATE table_for_test SET name=$1, updated_at=$2 WHERE uid=$3", "bbbbbb", time.Now(), "a")
+		result, err := Exec(nil, "UPDATE table_for_tests SET name=$1, updated_at=$2 WHERE uid=$3", "bbbbbb", time.Now(), "a")
 		if err != nil {
 			t.Fatal("got error")
 		}
@@ -100,7 +100,7 @@ func TestSQL(t *testing.T) {
 	})
 
 	t.Run("success_select_with_nil_result", func(t *testing.T) {
-		r, err := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid='5'")
+		r, err := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid='5'")
 		if err != nil {
 			t.Fatal("got error")
 		}
@@ -115,7 +115,7 @@ func TestSQL(t *testing.T) {
 func TestUniqError(t *testing.T) {
 	refreshDB()
 
-	r, err := Exec(nil, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaaaa", "a")
+	r, err := Exec(nil, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aaaaaa", "a")
 	if err != nil {
 		t.Fatal("got error")
 	}
@@ -123,7 +123,7 @@ func TestUniqError(t *testing.T) {
 	testutil.AssertEqual(t, int(row), 1)
 
 	t.Run("uniq_error", func(t *testing.T) {
-		_, err := Exec(nil, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaaaa", "a")
+		_, err := Exec(nil, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aaaaaa", "a")
 		if err == nil {
 			t.Fatal("should got error")
 		}
@@ -148,7 +148,7 @@ func TestUniqErrorAtCommit(t *testing.T) {
 		var err error
 		go func() {
 			err = Transaction(context.Background(), func(tx *sql.Tx) error {
-				re, err := Exec(tx, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaaaa", uid)
+				re, err := Exec(tx, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aaaaaa", uid)
 				row, _ := re.RowsAffected()
 				testutil.AssertEqual(t, err, nil)
 				testutil.AssertEqual(t, int(row), 1)
@@ -174,7 +174,7 @@ func TestUniqErrorAtCommit(t *testing.T) {
 				<-syn1 //１つ目のスレッドがinsertをするまで待つ。
 				d("g2 syn1 recieved")
 
-				u, err = Query(tx, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1", uid)
+				u, err = Query(tx, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1", uid)
 				testutil.AssertEqual(t, err, nil)
 				testutil.AssertEqual(t, len(u), 0) // リードコミッティドなので何も取得されない。
 
@@ -186,7 +186,7 @@ func TestUniqErrorAtCommit(t *testing.T) {
 				// そして、１つ目のスレッドがコミットを完了した後にこちら側がエラーになる。
 				// uniq制約はMVCCで動作するため、分離レベルに関係ない。
 				// （リードコミッティド以上でも、コミットされていないデータに対して制約が適用される。）
-				_, err := Exec(tx, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaaaa", uid)
+				_, err := Exec(tx, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aaaaaa", uid)
 				d("g2 insert done")
 				dv(err)
 				testutil.AssertEqual(t, err, ErrUniqConstraint) // uniq制約違反になる。
@@ -212,7 +212,7 @@ func TestPanicLock(t *testing.T) {
 	refreshDB()
 
 	uid := "aa"
-	Exec(nil, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaa", uid)
+	Exec(nil, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aaaa", uid)
 
 	t.Run("lock_is_released_when_panic_occured", func(t *testing.T) {
 		syn1 := make(chan interface{}, 1)
@@ -235,7 +235,7 @@ func TestPanicLock(t *testing.T) {
 			}()
 			err = Transaction(context.Background(), func(tx *sql.Tx) error {
 				var p []TableForTest
-				p, err = Query(tx, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1 FOR UPDATE NOWAIT", uid)
+				p, err = Query(tx, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1 FOR UPDATE NOWAIT", uid)
 				testutil.AssertEqual(t, err, nil)
 				testutil.AssertEqual(t, len(p), 1)
 
@@ -249,7 +249,7 @@ func TestPanicLock(t *testing.T) {
 				<-syn1 //１つ目のスレッドがロックをかけるまで待つ。
 				d("g2 syn1 recieved")
 
-				_, err = Query(tx, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1 FOR UPDATE NOWAIT", uid)
+				_, err = Query(tx, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1 FOR UPDATE NOWAIT", uid)
 				testutil.AssertEqual(t, err, nil) // ErrLockNotAvailableにならないこと
 
 				syn2 <- struct{}{}
@@ -282,13 +282,13 @@ func TestDeadLock(t *testing.T) {
 		var err1 error
 		go func() {
 			err1 = Transaction(context.Background(), func(tx *sql.Tx) error {
-				Exec(tx, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaa", uid1)
+				Exec(tx, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aaaa", uid1)
 
 				syn1 <- struct{}{} // insertが終わったら2つ目のスレッドへ知らせる。
 				d("g1 syn1 sent and syn2 wait...")
 				<-syn2 // ２つ目のスレッドがinsertするのを待つ。
 
-				_, err := Exec(tx, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "bbbb", uid2) // ここでロック待ちになる。
+				_, err := Exec(tx, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "bbbb", uid2) // ここでロック待ちになる。
 
 				// デッドロックが検出された場合は、片方は成功し、(errはnil)
 				// 片方はdead lockとして失敗する。
@@ -313,12 +313,12 @@ func TestDeadLock(t *testing.T) {
 				<-syn1 //１つ目のスレッドがinsertをするまで待つ。
 				d("g2 syn1 recieved")
 
-				Exec(tx, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "bbbb", uid2)
+				Exec(tx, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "bbbb", uid2)
 
 				syn2 <- struct{}{} // insertしたら スレッド1に知らせる。
 				d("g2 syn2 sent")
 
-				_, err := Exec(tx, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aaaa", uid1) // ここでロック待ちになる。
+				_, err := Exec(tx, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aaaa", uid1) // ここでロック待ちになる。
 
 				df("g2 error: %v", err)
 				if err != nil {
@@ -348,8 +348,8 @@ func TestLockWaitAtSameRow(t *testing.T) {
 	refreshDB()
 	uid := "aa"
 	t.Run("row_lock_wait_at_update", func(t *testing.T) {
-		Exec(nil, "INSERT INTO table_for_test (uid, name) VALUES ($1, $2)", uid, "aaaa")
-		m, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1", uid)
+		Exec(nil, "INSERT INTO table_for_tests (uid, name) VALUES ($1, $2)", uid, "aaaa")
+		m, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1", uid)
 
 		syn1 := make(chan interface{}, 1)
 		var wg sync.WaitGroup
@@ -359,7 +359,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 		check := 0
 		go func() {
 			err = Transaction(context.Background(), func(tx *sql.Tx) error {
-				_, err = Exec(tx, "UPDATE table_for_test SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
+				_, err = Exec(tx, "UPDATE table_for_tests SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
 				testutil.AssertEqual(t, err, nil)
 
 				syn1 <- struct{}{} // updateが終わったら2つ目のスレッドへ知らせる。
@@ -384,7 +384,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 				// まだ１つ目のスレッドがコミットしていない場合でも、
 				// 同一のレコードの更新のため待機が発生する。
 				// （リードコミッティドでも、コミットされていないデータに対して制約が適用される。）
-				_, err = Exec(tx, "UPDATE table_for_test SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
+				_, err = Exec(tx, "UPDATE table_for_tests SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
 				testutil.AssertEqual(t, err, nil)
 				if err != nil {
 					return err
@@ -405,10 +405,10 @@ func TestLockWaitAtSameRow(t *testing.T) {
 	refreshDB()
 	uid2 := "bb"
 	t.Run("no_wait_at_update_because_not_same_row", func(t *testing.T) {
-		Exec(nil, "INSERT INTO table_for_test (uid, name) VALUES ($1, $2)", uid, "aaaa")
-		Exec(nil, "INSERT INTO table_for_test (uid, name) VALUES ($1, $2)", uid2, "bbbb")
-		m, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1", uid)
-		m2, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1", uid2)
+		Exec(nil, "INSERT INTO table_for_tests (uid, name) VALUES ($1, $2)", uid, "aaaa")
+		Exec(nil, "INSERT INTO table_for_tests (uid, name) VALUES ($1, $2)", uid2, "bbbb")
+		m, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1", uid)
+		m2, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1", uid2)
 
 		syn1 := make(chan interface{}, 1)
 		var wg sync.WaitGroup
@@ -418,7 +418,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 		check := 0
 		go func() {
 			err = Transaction(context.Background(), func(tx *sql.Tx) error {
-				_, err = Exec(tx, "UPDATE table_for_test SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
+				_, err = Exec(tx, "UPDATE table_for_tests SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
 				testutil.AssertEqual(t, err, nil)
 
 				syn1 <- struct{}{} // updateまで終わったら2つ目のスレッドへ知らせる。
@@ -441,7 +441,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 				d("g2 syn1 recieved")
 
 				// 対象のレコードが異なるので、waitは発生しない。
-				_, err = Exec(tx, "UPDATE table_for_test SET updated_at=$1 WHERE uid=$2", time.Now(), m2.UID)
+				_, err = Exec(tx, "UPDATE table_for_tests SET updated_at=$1 WHERE uid=$2", time.Now(), m2.UID)
 				testutil.AssertEqual(t, err, nil)
 				if err != nil {
 					return err
@@ -461,8 +461,8 @@ func TestLockWaitAtSameRow(t *testing.T) {
 
 	refreshDB()
 	t.Run("row_lock_wait_at_update", func(t *testing.T) {
-		Exec(nil, "INSERT INTO table_for_test (uid, name) VALUES ($1, $2)", uid, "aaaa")
-		m, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1", uid)
+		Exec(nil, "INSERT INTO table_for_tests (uid, name) VALUES ($1, $2)", uid, "aaaa")
+		m, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1", uid)
 
 		syn1 := make(chan interface{}, 1)
 		var wg sync.WaitGroup
@@ -472,7 +472,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 		check := 0
 		go func() {
 			err = Transaction(context.Background(), func(tx *sql.Tx) error {
-				_, err = Exec(tx, "UPDATE table_for_test SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
+				_, err = Exec(tx, "UPDATE table_for_tests SET updated_at=$1 WHERE uid=$2", time.Now(), m.UID)
 				testutil.AssertEqual(t, err, nil)
 
 				syn1 <- struct{}{} // updateが終わったら2つ目のスレッドへ知らせる。
@@ -498,7 +498,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 				// これは EXCLUSIVEおよびACCESS EXCLUSIVE のみと競合するため、
 				// この場合は競合しない。したがってwaitは発生しない。
 				// https://www.postgresql.jp/document/14/html/explicit-locking.html
-				QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1", m.UID)
+				QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1", m.UID)
 				testutil.AssertEqual(t, err, nil)
 				if err != nil {
 					return err
@@ -523,7 +523,7 @@ func TestLockWaitAtSameRow(t *testing.T) {
 func TestLockError(t *testing.T) {
 	refreshDB()
 
-	_, err := Exec(nil, "INSERT INTO table_for_test (uid) VALUES ($1)", "a")
+	_, err := Exec(nil, "INSERT INTO table_for_tests (uid) VALUES ($1)", "a")
 	if err != nil {
 		t.Fatalf("got error")
 	}
@@ -536,7 +536,7 @@ func TestLockError(t *testing.T) {
 		var err error
 		go func() {
 			err = Transaction(context.Background(), func(tx *sql.Tx) error {
-				_, err := Query(tx, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1 FOR UPDATE NOWAIT", "a")
+				_, err := Query(tx, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1 FOR UPDATE NOWAIT", "a")
 				if err != nil {
 					return err
 				}
@@ -550,7 +550,7 @@ func TestLockError(t *testing.T) {
 
 		err = Transaction(context.Background(), func(tx *sql.Tx) error {
 			<-syn1
-			_, err := QueryFirst(tx, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1 FOR UPDATE NOWAIT", "a")
+			_, err := QueryFirst(tx, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1 FOR UPDATE NOWAIT", "a")
 			if err != nil {
 				syn2 <- struct{}{}
 				return err
@@ -576,7 +576,7 @@ func TestInvalidSQL(t *testing.T) {
 			}
 			testutil.AssertEqual(t, r, PanicPlaceHolderNumberNotMatch)
 		}()
-		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE id=$1 AND id=$2", "a")
+		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE id=$1 AND id=$2", "a")
 		if err != nil {
 			t.Fatalf("should not get error")
 		}
@@ -590,7 +590,7 @@ func TestInvalidSQL(t *testing.T) {
 			}
 			testutil.AssertEqual(t, r, PanicLockingReadMustUseNowait)
 		}()
-		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=a FOR SELECT")
+		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=a FOR SELECT")
 		if err != nil {
 			t.Fatalf("should not get error")
 		}
@@ -604,13 +604,13 @@ func TestInvalidSQL(t *testing.T) {
 			}
 			testutil.AssertContainStr(t, r, PostgresErrCodeInvalidSyntax)
 		}()
-		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE id=$1", "id;SELECT * FROM table_for_test")
+		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE id=$1", "id;SELECT * FROM table_for_tests")
 		if err != nil {
 			t.Fatalf("should not get error")
 		}
 	})
 
-	Exec(nil, "INSERT INTO table_for_test (uid) VALUES ($1)", "a")
+	Exec(nil, "INSERT INTO table_for_tests (uid) VALUES ($1)", "a")
 
 	t.Run("fail_not_select_at_query", func(t *testing.T) {
 		var r interface{}
@@ -620,7 +620,7 @@ func TestInvalidSQL(t *testing.T) {
 			}
 			testutil.AssertEqual(t, r, PanicQueryNotContanSelect)
 		}()
-		_, err := Query(nil, &TableForTest{}, "DELETE FROM table_for_test")
+		_, err := Query(nil, &TableForTest{}, "DELETE FROM table_for_tests")
 		if err != nil {
 			t.Fatalf("should not get error")
 		}
@@ -634,14 +634,14 @@ func TestInvalidSQL(t *testing.T) {
 			}
 			testutil.AssertEqual(t, r, PanicDeleteSQLMustUseWhere)
 		}()
-		_, err := Exec(nil, "DELETE FROM table_for_test")
+		_, err := Exec(nil, "DELETE FROM table_for_tests")
 		if err != nil {
 			t.Fatalf("should not get error")
 		}
 	})
 
 	t.Run("user_is_not_deleted", func(t *testing.T) {
-		u, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE uid=$1", "a")
+		u, _ := QueryFirst(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1", "a")
 		if u == nil {
 			t.Fatalf("user not exists")
 		}
@@ -655,7 +655,7 @@ func TestInvalidSQL(t *testing.T) {
 			}
 			testutil.AssertEqual(t, r, PanicSelectSQLMustUseWhere)
 		}()
-		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_test")
+		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_tests")
 		if err != nil {
 			t.Fatalf("should not get error")
 		}
@@ -667,14 +667,14 @@ func TestInvalidSQL(t *testing.T) {
 func TestColumnConstraint(t *testing.T) {
 	refreshDB()
 	t.Run("ok_length_varchar", func(t *testing.T) {
-		Exec(nil, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") //500文字
+		Exec(nil, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") //500文字
 
-		Exec(nil, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aa", "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ") //500文字
+		Exec(nil, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aa", "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ") //500文字
 
 		// 上限を超えた部分にある文字がすべて空白の場合はエラーにはならず、
 		// 文字列の最大長にまで切り詰められる。
 		// https://www.postgresql.jp/docs/14/datatype-character.html
-		Exec(nil, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aa", "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ         ") //500文字+半角空白
+		Exec(nil, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aa", "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ         ") //500文字+半角空白
 	})
 
 	t.Run("over_length_varchar", func(t *testing.T) {
@@ -686,7 +686,7 @@ func TestColumnConstraint(t *testing.T) {
 			testutil.AssertContainStr(t, r, "SQLSTATE 22001")
 		}()
 
-		Exec(nil, "INSERT INTO table_for_test (name, uid) VALUES ($1, $2)", "aa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") //501文字
+		Exec(nil, "INSERT INTO table_for_tests (name, uid) VALUES ($1, $2)", "aa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") //501文字
 	})
 }
 
@@ -698,27 +698,27 @@ func TestIsNotSeqScanSQL(t *testing.T) {
 			if r = recover(); r == nil {
 				t.Fatalf("should get panic")
 			}
-			testutil.AssertEqual(t, r, fmt.Sprintf(PanicSQLIsSeqScan, "SELECT * FROM table_for_test WHERE name = $1"))
+			testutil.AssertEqual(t, r, fmt.Sprintf(PanicSQLIsSeqScan, "SELECT * FROM table_for_tests WHERE name = $1"))
 		}()
-		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_test WHERE name = $1", "aaaaa")
+		_, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE name = $1", "aaaaa")
 		if err != nil {
 			t.Fatalf("should not get error")
 		}
 	})
 
 	t.Run("IsNotSeqScanSQ", func(t *testing.T) {
-		testutil.AssertTrue(t, CheckSeqScan("SELECT name FROM table_for_test WHERE '"+SeqScanCheckDisableClause+"' = '"+SeqScanCheckDisableClause+"'"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = $1", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1)", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1))", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1)))", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1))))", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1)))))", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1))))))", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1)))))))", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1))))))))", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1)))))))))", "aaaaa"))
-		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = ANY(SELECT name FROM table_for_test WHERE name = $1))))))))))", "aaaaa"))
+		testutil.AssertTrue(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE '"+SeqScanCheckDisableClause+"' = '"+SeqScanCheckDisableClause+"'"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = $1", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1)", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1))", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1)))", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1))))", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1)))))", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1))))))", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1)))))))", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1))))))))", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1)))))))))", "aaaaa"))
+		testutil.AssertFalse(t, CheckSeqScan("SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = ANY(SELECT name FROM table_for_tests WHERE name = $1))))))))))", "aaaaa"))
 	})
 }
 
@@ -730,52 +730,52 @@ func TestContainStr(t *testing.T) {
 		result bool
 	}{
 		{
-			target: "DELETE FROM table_for_test WHERE id = $1",
+			target: "DELETE FROM table_for_tests WHERE id = $1",
 			str:    "delete",
 			result: true,
 		},
 		{
-			target: "delete FROM table_for_test WHERE id = $1",
+			target: "delete FROM table_for_tests WHERE id = $1",
 			str:    "DELETE",
 			result: true,
 		},
 		{
-			target: "delete FROM table_for_test WHERE id = $1",
+			target: "delete FROM table_for_tests WHERE id = $1",
 			str:    "where",
 			result: true,
 		},
 		{
-			target: "deLete FROM table_for_test WHERE id = $1",
+			target: "deLete FROM table_for_tests WHERE id = $1",
 			str:    "delete",
 			result: true,
 		},
 		{
-			target: "deLete FROM table_for_test WHERE id = $1",
+			target: "deLete FROM table_for_tests WHERE id = $1",
 			str:    "delet",
 			result: true,
 		},
 		{
-			target: "deLete * FROM table_for_test WHERE id = $1",
+			target: "deLete * FROM table_for_tests WHERE id = $1",
 			str:    "delett",
 			result: false,
 		},
 		{
-			target: "deLete * FROM table_for_test WHERE id = $1",
+			target: "deLete * FROM table_for_tests WHERE id = $1",
 			str:    "where",
 			result: true,
 		},
 		{
-			target: "select * FROM table_for_test WHERE id = $1 FOR UPDATE",
+			target: "select * FROM table_for_tests WHERE id = $1 FOR UPDATE",
 			str:    "FOR UPDATE",
 			result: true,
 		},
 		{
-			target: "select * FROM table_for_test WHERE id = $1 FOR UPDATE",
+			target: "select * FROM table_for_tests WHERE id = $1 FOR UPDATE",
 			str:    "for update",
 			result: true,
 		},
 		{
-			target: "select * FROM table_for_test WHERE id = $1 FOR UPDATE",
+			target: "select * FROM table_for_tests WHERE id = $1 FOR UPDATE",
 			str:    "for select",
 			result: false,
 		},
@@ -803,7 +803,7 @@ func TestLog(t *testing.T) {
 }
 
 func refreshDB() {
-	dbRefresh([]string{"table_for_test"})
+	dbRefresh([]string{"table_for_tests"})
 }
 
 func openDB(dbHost, dbUser, dbPassword string, dbPort int, mode string) {

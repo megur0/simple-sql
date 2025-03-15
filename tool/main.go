@@ -54,7 +54,7 @@ func initDB() {
 	}
 
 	_, err = db.Exec(`
-	CREATE TABLE IF NOT EXISTS "table_for_test" (
+	CREATE TABLE IF NOT EXISTS "table_for_tests" (
 		"id" uuid NOT NULL DEFAULT uuid_generate_v4(),
 		"uid" VARCHAR(500) NOT NULL,
 		"name" text,
@@ -67,12 +67,12 @@ func initDB() {
 		panic(err)
 	}
 
-	_, err = db.Exec(`ALTER TABLE "table_for_test" DROP CONSTRAINT IF EXISTS "uniq__table_for_test__uid"`)
+	_, err = db.Exec(`ALTER TABLE "table_for_tests" DROP CONSTRAINT IF EXISTS "uniq__table_for_tests__uid"`)
 	if err != nil {
 		panic(err)
 	}
 
-	_, err = db.Exec(`ALTER TABLE "table_for_test" ADD CONSTRAINT "uniq__table_for_test__uid" UNIQUE("uid")`)
+	_, err = db.Exec(`ALTER TABLE "table_for_tests" ADD CONSTRAINT "uniq__table_for_tests__uid" UNIQUE("uid")`)
 	if err != nil {
 		panic(err)
 	}
