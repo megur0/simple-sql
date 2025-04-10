@@ -67,11 +67,11 @@ func TestGetInsertSQL(t *testing.T) {
 			var values []any
 			switch v := tt.input.(type) {
 			case TestStruct:
-				sql, values = getInsertSQL(v)
+				sql, values = getInsertSQL(v, []string{"id", "created_at", "updated_at"})
 			case int:
-				sql, values = getInsertSQL(v)
+				sql, values = getInsertSQL(v, []string{"id", "created_at", "updated_at"})
 			case TestStructWithMap:
-				sql, values = getInsertSQL(v)
+				sql, values = getInsertSQL(v, []string{"id", "created_at", "updated_at"})
 			default:
 			}
 

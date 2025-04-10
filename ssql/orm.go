@@ -144,12 +144,19 @@ func getDeleteSQL(s any, whereClauses []string) string {
 
 // id, created_at, updated_atには値はセットされず、データベース側のデフォルト値に委ねる。
 func Insert(tx HasExec, s any) (sql.Result, error) {
-	sql, values := getInsertSQL(s)
+	sql, values := getInsertSQL(s, []string{"id", "created_at", "updated_at"})
 	debugSQL(sql, values)
 	return Exec(tx, sql, values...)
 }
 
-func getInsertSQL(s any) (string, []any) {
+// セットしないフィールドを明示的に指定する。
+func InsertWithIgnores(tx HasExec, s any, ignores []string) (sql.Result, error) {
+	sql, values := getInsertSQL(s, ignores)
+	debugSQL(sql, values)
+	return Exec(tx, sql, values...)
+}
+
+func getInsertSQL(s any, ignores []string) (string, []any) {
 	rv := checkAndGetStructValue(s)
 	rt := rv.Type()
 
@@ -158,7 +165,7 @@ func getInsertSQL(s any) (string, []any) {
 
 	for i := range rt.NumField() {
 		fieldName := rt.Field(i).Tag.Get("database")
-		if slices.Contains([]string{"id", "created_at", "updated_at"}, fieldName) {
+		if slices.Contains(ignores, fieldName) {
 			continue
 		}
 
