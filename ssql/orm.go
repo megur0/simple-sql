@@ -56,17 +56,30 @@ func replacePlaceholders(query string, startIdx int) string {
 	})
 }
 
-// id, created_at, updated_atはsetFieldsに含めてもスキップされる。
 // updated_atは暗黙的に更新される。
 // valueを"NOW"にすると現在時刻が入る。（updated_atと同じ値が入る）
-func Update(tx HasExec, s any, whereClauses []string, whereValues []any, setFields map[string]any) (sql.Result, error) {
-	sql, values := getUpdateSQL(s, whereClauses, whereValues, setFields)
+func Update(tx HasExec, s any, whereClauses []string, whereValues []any, setMaps map[string]any) (sql.Result, error) {
+	setClauses := []string{}
+	setValues := []any{}
+	setField := getOrderedKeys(setMaps)
+	for _, field := range setField {
+		setClauses = append(setClauses, field+" = ?")
+		setValues = append(setValues, setMaps[field])
+	}
+	sql, setValues := getUpdateSQL(s, whereClauses, whereValues, setClauses, setValues)
+	debugSQL(sql, setValues)
+	return Exec(tx, sql, setValues...)
+}
+
+// Updateするフィールドに式を指定したい場合に利用する
+func UpdateWithClauses(tx HasExec, s any, whereClauses []string, whereValues []any, setClauses []string, setValues []any) (sql.Result, error) {
+	sql, values := getUpdateSQL(s, whereClauses, whereValues, setClauses, setValues)
 	debugSQL(sql, values)
 	return Exec(tx, sql, values...)
 }
 
 // マップはループで順番が保障されないため、順番を保証するためにキーを取得する
-func getOrderedFieldsKey(s map[string]any) []string {
+func getOrderedKeys(s map[string]any) []string {
 	keys := make([]string, 0, len(s))
 	for key := range s {
 		keys = append(keys, key)
@@ -75,31 +88,21 @@ func getOrderedFieldsKey(s map[string]any) []string {
 	return keys
 }
 
-func getUpdateSQL(s any, whereClauses []string, whereValues []any, setFields map[string]any) (string, []any) {
+func getUpdateSQL(s any, whereClauses []string, whereValues []any, setClauses []string, setValues []any) (string, []any) {
 	rv := checkAndGetStructValue(s)
 	rt := rv.Type()
 
 	now := time.Now()
-	setClauses := []string{}
-	values := []any{}
+	setClauses2 := slices.Clone(setClauses)
+	values := slices.Clone(setValues)
 
-	setFieldKeys := getOrderedFieldsKey(setFields)
-	for _, field := range setFieldKeys {
-		// Skip id, created_at, updated_at fields
-		if slices.Contains([]string{"id", "created_at", "updated_at"}, field) {
-			continue
-		}
-		setClauses = append(setClauses, field+" = ?")
-
-		if strVal, ok := setFields[field].(string); ok && strVal == "NOW" {
-			values = append(values, now)
-		} else {
-			values = append(values, setFields[field])
+	for i, setValue := range setValues {
+		if strVal, ok := setValue.(string); ok && strVal == "NOW" {
+			values[i] = now
 		}
 	}
 
-	// Add updated_at field
-	setClauses = append(setClauses, "updated_at = ?")
+	setClauses2 = append(setClauses2, "updated_at = ?")
 	values = append(values, now)
 	values = append(values, whereValues...)
 
@@ -108,7 +111,7 @@ func getUpdateSQL(s any, whereClauses []string, whereValues []any, setFields map
 		whereClause = " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 	tableName := toTableName(rt.Name())
-	query := "UPDATE " + tableName + " SET " + strings.Join(setClauses, ", ") + whereClause
+	query := "UPDATE " + tableName + " SET " + strings.Join(setClauses2, ", ") + whereClause
 
 	// Replace placeholders with $1, $2, ...
 	query = replacePlaceholders(query, 0)

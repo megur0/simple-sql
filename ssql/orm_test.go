@@ -160,7 +160,8 @@ func TestGetUpdateSQL(t *testing.T) {
 		input        any
 		whereClauses []string
 		whereValues  []any
-		setFields    map[string]any
+		setClauses   []string
+		setValues    []any
 		expected     string
 	}{
 		{
@@ -168,28 +169,40 @@ func TestGetUpdateSQL(t *testing.T) {
 			input:        TestStruct{},
 			whereClauses: []string{"id = ?"},
 			whereValues:  []any{1},
-			setFields:    map[string]any{"name": "John", "age": 30},
-			expected:     "UPDATE test_structs SET age = $1, name = $2, updated_at = $3 WHERE id = $4",
+			setClauses:   []string{"name = ?", "age = ?"},
+			setValues:    []any{"John", 30, "2023-10-01"},
+			expected:     "UPDATE test_structs SET name = $1, age = $2, updated_at = $3 WHERE id = $4",
 		},
 		{
 			name:         "struct with where clause",
 			input:        TestStruct{},
 			whereClauses: []string{"name = ?", "age = ?"},
 			whereValues:  []any{"John", 30},
-			setFields:    map[string]any{"name": "John", "age": 30},
-			expected:     "UPDATE test_structs SET age = $1, name = $2, updated_at = $3 WHERE name = $4 AND age = $5",
+			setClauses:   []string{"name = ?", "age = ?"},
+			setValues:    []any{"John", 30, "2023-10-01"},
+			expected:     "UPDATE test_structs SET name = $1, age = $2, updated_at = $3 WHERE name = $4 AND age = $5",
 		},
 		{
-			name:      "struct with map",
-			input:     TestStructWithMap{},
-			setFields: map[string]any{"data": map[string]string{"data": "value"}},
-			expected:  "UPDATE test_struct_with_maps SET data = $1, updated_at = $2",
+			name:       "struct with map",
+			input:      TestStructWithMap{},
+			setClauses: []string{"data = ?"},
+			setValues:  []any{map[string]string{"data": "value"}, "2023-10-01"},
+			expected:   "UPDATE test_struct_with_maps SET data = $1, updated_at = $2",
+		},
+		{
+			name:         "struct with complex set clause",
+			input:        TestStruct{},
+			whereClauses: []string{"id = ?"},
+			whereValues:  []any{1},
+			setClauses:   []string{"age = (age + 1)"},
+			setValues:    []any{"2023-10-01"},
+			expected:     "UPDATE test_structs SET age = (age + 1), updated_at = $1 WHERE id = $2",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sql, _ := getUpdateSQL(tt.input, tt.whereClauses, tt.whereValues, tt.setFields)
+			sql, _ := getUpdateSQL(tt.input, tt.whereClauses, tt.whereValues, tt.setClauses, tt.setValues)
 
 			if sql != tt.expected {
 				t.Errorf("expected %v, got %v", tt.expected, sql)
