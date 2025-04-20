@@ -110,11 +110,14 @@ func TestToTableName(t *testing.T) {
 // env `cat .env` go test -v -count=1 -timeout 60s -run ^TestGetQuerySQL$ ./ssql
 func TestGetQuerySQL(t *testing.T) {
 	tests := []struct {
-		name         string
-		input        any
-		whereClauses []string
-		whereValues  []any
-		expected     string
+		name           string
+		input          any
+		whereClauses   []string
+		whereValues    []any
+		orderByClauses []string
+		limitOffset    map[string]int
+		expected       string
+		expectedValues []any
 	}{
 		{
 			name:     "simple struct",
@@ -122,32 +125,75 @@ func TestGetQuerySQL(t *testing.T) {
 			expected: "SELECT * FROM test_structs",
 		},
 		{
-			name:         "struct with where clause",
-			input:        TestStruct{},
-			whereClauses: []string{"name = ?", "age = ?"},
-			whereValues:  []any{"John", 30},
-			expected:     "SELECT * FROM test_structs WHERE name = $1 AND age = $2",
+			name:           "struct with where clause",
+			input:          TestStruct{},
+			whereClauses:   []string{"name = ?", "age = ?"},
+			whereValues:    []any{"John", 30},
+			expected:       "SELECT * FROM test_structs WHERE name = $1 AND age = $2",
+			expectedValues: []any{"John", 30},
 		},
 		{
-			name:         "struct with where clause",
-			input:        TestStruct{},
-			whereClauses: []string{"name = ?", "is_valid = true"},
-			whereValues:  []any{"John"},
-			expected:     "SELECT * FROM test_structs WHERE name = $1 AND is_valid = true",
+			name:           "struct with where clause",
+			input:          TestStruct{},
+			whereClauses:   []string{"name = ?", "is_valid = true"},
+			whereValues:    []any{"John"},
+			expected:       "SELECT * FROM test_structs WHERE name = $1 AND is_valid = true",
+			expectedValues: []any{"John"},
 		},
 		{
 			name:     "struct with map",
 			input:    TestStructWithMap{Data: map[string]string{"key": "value"}},
 			expected: "SELECT * FROM test_struct_with_maps",
 		},
+		{
+			name:           "struct with order by",
+			input:          TestStruct{},
+			orderByClauses: []string{"name ASC", "age DESC"},
+			expected:       "SELECT * FROM test_structs ORDER BY name ASC, age DESC",
+		},
+		{
+			name:           "struct with limit",
+			input:          TestStruct{},
+			limitOffset:    map[string]int{"limit": 10},
+			expected:       "SELECT * FROM test_structs LIMIT $1",
+			expectedValues: []any{10},
+		},
+		{
+			name:           "struct with offset",
+			input:          TestStruct{},
+			limitOffset:    map[string]int{"offset": 5},
+			expected:       "SELECT * FROM test_structs OFFSET $1",
+			expectedValues: []any{5},
+		},
+		{
+			name:           "struct with limit and offset",
+			input:          TestStruct{},
+			limitOffset:    map[string]int{"limit": 10, "offset": 5},
+			expected:       "SELECT * FROM test_structs LIMIT $1 OFFSET $2",
+			expectedValues: []any{10, 5},
+		},
+		{
+			name:           "struct with where, order by, limit and offset",
+			input:          TestStruct{},
+			whereClauses:   []string{"name = ?"},
+			whereValues:    []any{"John"},
+			orderByClauses: []string{"age DESC"},
+			limitOffset:    map[string]int{"limit": 10, "offset": 5},
+			expected:       "SELECT * FROM test_structs WHERE name = $1 ORDER BY age DESC LIMIT $2 OFFSET $3",
+			expectedValues: []any{"John", 10, 5},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sql, _ := getQuerySQL(tt.input, tt.whereClauses, tt.whereValues)
+			sql, values := getQuerySQL(tt.input, tt.whereClauses, tt.whereValues, tt.orderByClauses, tt.limitOffset)
 
 			if sql != tt.expected {
 				t.Errorf("expected %v, got %v", tt.expected, sql)
+			}
+
+			if tt.expectedValues != nil && !reflect.DeepEqual(values, tt.expectedValues) {
+				t.Errorf("expected values %v, got %v", tt.expectedValues, values)
 			}
 		})
 	}
@@ -287,6 +333,54 @@ func TestORM(t *testing.T) {
 		}
 	})
 
+	t.Run("success_find_limit", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			whereClauses   []string
+			whereValues    []any
+			orderByClauses []string
+			limitOffset    map[string]int
+			expectedCount  int
+		}{
+			{
+				name:           "find with limit",
+				whereClauses:   []string{"uid = ?"},
+				whereValues:    []any{"aaa"},
+				orderByClauses: []string{"name ASC"},
+				limitOffset:    map[string]int{"limit": 1},
+				expectedCount:  1,
+			},
+			{
+				name:           "find with limit and offset",
+				whereClauses:   []string{"uid = ?"},
+				whereValues:    []any{"aaa"},
+				orderByClauses: []string{"name ASC"},
+				limitOffset:    map[string]int{"limit": 1, "offset": 1},
+				expectedCount:  0,
+			},
+			{
+				name:           "find with no results",
+				whereClauses:   []string{"uid = ?"},
+				whereValues:    []any{"nonexistent"},
+				orderByClauses: []string{"name ASC"},
+				limitOffset:    map[string]int{"limit": 1},
+				expectedCount:  0,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				results, err := FindLimit(nil, &TableForTest{}, tt.whereClauses, tt.whereValues, tt.orderByClauses, tt.limitOffset)
+				if err != nil {
+					t.Errorf("got error: %v", err)
+				}
+				if len(results) != tt.expectedCount {
+					t.Errorf("expected %v results, got %v", tt.expectedCount, len(results))
+				}
+			})
+		}
+	})
+
 	t.Run("success_first", func(t *testing.T) {
 		r, err := First(nil, &TableForTest{}, []string{"uid = ?"}, []any{"aaa"})
 		if err != nil {
@@ -301,6 +395,54 @@ func TestORM(t *testing.T) {
 		}
 		if r != nil {
 			t.Error("result should be nil")
+		}
+	})
+
+	t.Run("success_first_limit", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			whereClauses   []string
+			whereValues    []any
+			orderByClauses []string
+			limitOffset    map[string]int
+			expectedResult *TableForTest
+		}{
+			{
+				name:           "find first with limit",
+				whereClauses:   []string{"uid = ?"},
+				whereValues:    []any{"aaa"},
+				orderByClauses: []string{"name ASC"},
+				limitOffset:    map[string]int{"limit": 1},
+				expectedResult: &TableForTest{Name: Ptr("aaaaaa"), UID: "aaa"},
+			},
+			{
+				name:           "find first with no results",
+				whereClauses:   []string{"uid = ?"},
+				whereValues:    []any{"nonexistent"},
+				orderByClauses: []string{"name ASC"},
+				limitOffset:    map[string]int{"limit": 1},
+				expectedResult: nil,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := FirstLimit(nil, &TableForTest{}, tt.whereClauses, tt.whereValues, tt.orderByClauses, tt.limitOffset)
+				if err != nil {
+					t.Errorf("got error: %v", err)
+				}
+
+				if tt.expectedResult == nil {
+					if result != nil {
+						t.Errorf("expected nil result, got %v", result)
+					}
+				} else {
+					// Compare fields except UUID
+					if *result.Name != *tt.expectedResult.Name || result.UID != tt.expectedResult.UID {
+						t.Errorf("expected %v, got %v", tt.expectedResult, result)
+					}
+				}
+			})
 		}
 	})
 

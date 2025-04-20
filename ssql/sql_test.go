@@ -19,11 +19,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-// テストの実行の際は事前に以下の実行が必要
-// ・テストDB(docker)の立ち上げ
-//  docker compose up -d
-// ・DBの初期設定
-//  env `cat .env` go run ./tool/main.go
+// 実行の際は事前にdockerの立ち上げとテストデータの生成が必要
+// make test_setup
 
 type TableForTest struct {
 	ID        uuid.UUID `database:"id"`

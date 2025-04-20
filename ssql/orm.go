@@ -16,18 +16,32 @@ import (
 var DebugSQL = false
 
 func First[M any](tx HasQuery, mp *M, whereClauses []string, whereValues []any) (*M, error) {
-	sql, values := getQuerySQL(mp, whereClauses, whereValues)
+	sql, values := getQuerySQL(mp, whereClauses, whereValues, nil, nil)
+	debugSQL(sql, values)
+	return QueryFirst(tx, mp, sql, values...)
+}
+
+func FirstLimit[M any](tx HasQuery, mp *M, whereClauses []string, whereValues []any, orderByClauses []string, limitOffset map[string]int) (*M, error) {
+	sql, values := getQuerySQL(mp, whereClauses, whereValues, orderByClauses, limitOffset)
 	debugSQL(sql, values)
 	return QueryFirst(tx, mp, sql, values...)
 }
 
 func Find[M any](tx HasQuery, mp *M, whereClauses []string, whereValues []any) ([]M, error) {
-	sql, values := getQuerySQL(mp, whereClauses, whereValues)
+	sql, values := getQuerySQL(mp, whereClauses, whereValues, nil, nil)
 	debugSQL(sql, values)
 	return Query(tx, mp, sql, values...)
 }
 
-func getQuerySQL(s any, whereClauses []string, whereValues []any) (string, []any) {
+// OrderBy, Limit, Offsetを指定する場合
+// limitOffsetはmapで"limit"と"offset"を指定する。
+func FindLimit[M any](tx HasQuery, mp *M, whereClauses []string, whereValues []any, orderByClauses []string, limitOffset map[string]int) ([]M, error) {
+	sql, values := getQuerySQL(mp, whereClauses, whereValues, orderByClauses, limitOffset)
+	debugSQL(sql, values)
+	return Query(tx, mp, sql, values...)
+}
+
+func getQuerySQL(s any, whereClauses []string, whereValues []any, orderByClauses []string, limitOffset map[string]int) (string, []any) {
 	rv := checkAndGetStructValue(s)
 	rt := rv.Type()
 
@@ -38,8 +52,26 @@ func getQuerySQL(s any, whereClauses []string, whereValues []any) (string, []any
 	if len(whereClauses) > 0 {
 		whereClause = " WHERE " + strings.Join(whereClauses, " AND ")
 	}
+	orderByClause := ""
+	if len(orderByClauses) > 0 {
+		orderByClause = " ORDER BY " + strings.Join(orderByClauses, ", ")
+	}
+	limitClause := ""
+	offsetClause := ""
+	if limitOffset != nil {
+		if limit, ok := limitOffset["limit"]; ok {
+			limitClause = " LIMIT ?"
+			values = append(values, limit)
+		}
+
+		if offset, ok := limitOffset["offset"]; ok {
+			offsetClause = " OFFSET ?"
+			values = append(values, offset)
+		}
+	}
+
 	tableName := toTableName(rt.Name())
-	query := "SELECT * FROM " + tableName + whereClause
+	query := "SELECT * FROM " + tableName + whereClause + orderByClause + limitClause + offsetClause
 
 	// Replace placeholders with $1, $2, ...
 	query = replacePlaceholders(query, 0)
