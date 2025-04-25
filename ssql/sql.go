@@ -80,6 +80,8 @@ func doAndRecover(c context.Context, tx *sql.Tx, f func(*sql.Tx) error) error {
 	return err
 }
 
+// 取得したデータの先頭を返す。
+// 受け取ったポインタの値も変更する。
 func QueryFirst[M any](tx HasQuery, mp *M, query string, args ...any) (*M, error) {
 	result, err := Query(tx, mp, query, args...)
 	if err != nil {
@@ -88,7 +90,8 @@ func QueryFirst[M any](tx HasQuery, mp *M, query string, args ...any) (*M, error
 	if len(result) < 1 {
 		return nil, nil
 	}
-	return &result[0], nil
+	*mp = result[0]
+	return mp, nil
 }
 
 // 取得したレコードを構造体へ格納してリストとして返す

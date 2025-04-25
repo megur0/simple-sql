@@ -105,6 +105,23 @@ func TestSQL(t *testing.T) {
 			t.Error("result should be nil")
 		}
 	})
+
+	t.Run("success_select_where", func(t *testing.T) {
+		l, err := Query(nil, &TableForTest{}, "SELECT * FROM table_for_tests WHERE uid=$1", "a")
+		if err != nil {
+			t.Error("got error")
+		}
+		testutil.AssertEqual(t, len(l), 1)
+
+		m1 := &TableForTest{}
+		m2, err := QueryFirst(nil, m1, "SELECT * FROM table_for_tests WHERE uid=$1", "a")
+		if err != nil {
+			t.Error("got error")
+		}
+		testutil.AssertNotUnTypedNil(t, m1)
+		testutil.AssertEqual(t, m1.UID, "a")
+		testutil.AssertNotUnTypedNil(t, m2)
+	})
 }
 
 // ユニーク制約エラーのハンドリング
@@ -840,7 +857,7 @@ func stats() {
 	}
 }
 
-func d(message string) {
+func d(message any) {
 	l.Debug(context.Background(), message)
 }
 
