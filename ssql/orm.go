@@ -174,9 +174,9 @@ func getDeleteSQL(s any, whereClauses []string) string {
 	return query
 }
 
-// created_at, updated_atには値はセットされず、データベース側のデフォルト値に委ねる。
+// id, created_at, updated_atには値はセットされず、データベース側のデフォルト値に委ねる。
 func Insert(tx HasExec, s any) (sql.Result, error) {
-	sql, values := getInsertSQL(s, []string{"created_at", "updated_at"})
+	sql, values := getInsertSQL(s, []string{"id", "created_at", "updated_at"})
 	debugSQL(sql, values)
 	return Exec(tx, sql, values...)
 }
