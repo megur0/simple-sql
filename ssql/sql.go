@@ -43,6 +43,9 @@ var ForceNowaitOnLockingRead = true
 // UPDATE文の際は"updated_at"が含まれている事を強制する
 var ForceUpdatedAtCheck = true
 
+// トランザクションにおいてロールバックが発生した際のログの出力有無
+var DumpTransactionRollbackLog = true
+
 func IsDebugMode() bool {
 	if Mode == MODE_PRODUCTION {
 		return false
@@ -64,11 +67,15 @@ type HasExec interface {
 func doAndRecover(c context.Context, tx *sql.Tx, f func(*sql.Tx) error) error {
 	defer func() {
 		if r := recover(); r != nil {
-			l.Warn(c, "rollback start because panic occured")
+			if DumpTransactionRollbackLog {
+				l.Warn(c, "rollback start because panic occured")
+			}
 			if err := tx.Rollback(); err != nil {
 				panic(err)
 			}
-			l.Warn(c, "rollback end")
+			if DumpTransactionRollbackLog {
+				l.Warn(c, "rollback end")
+			}
 
 			// panicのスタックトレース情報を最終的に出力させたいので引き継ぐ。
 			panic(r)
@@ -164,8 +171,8 @@ func Query[M any](tx HasQuery, mp *M, query string, args ...any) ([]M, error) {
 		panic("model mubt be struct.")
 	}
 	// 計算量をO(構造体のフィールド数+結果セットのカラム数)とするため、mapにしておく。
-	structFieldNameToTypeMap := make(map[string]interface{})
-	for i := 0; i < structType.NumField(); i++ {
+	structFieldNameToTypeMap := make(map[string]any)
+	for i := range structType.NumField() {
 		columnName := structType.Field(i).Tag.Get("database")
 		// タグはすべてのフィールドに設定されている必要がある。
 		if columnName == "" {
@@ -180,7 +187,7 @@ func Query[M any](tx HasQuery, mp *M, query string, args ...any) ([]M, error) {
 	if err != nil {
 		panic(err)
 	}
-	structFieldValuePtrInterfaces := make([]interface{}, len(ct))
+	structFieldValuePtrInterfaces := make([]any, len(ct))
 	for i, c := range ct {
 		structFieldAddr, ok := structFieldNameToTypeMap[c.Name()]
 		// 結果セットのフィールドが、モデルのタグに含まれていない場合はpanic
@@ -469,6 +476,8 @@ func isAssumedSQLError(err error) error {
 // (この関数自体の処理によって発生するエラーは無く、それらは全てpanicとなる)
 //
 // 今のところトランザクションのネストは想定していないので、txの引数は取っていない。
+//
+// コンテキストはロールバック時のログ出力のために渡している。
 func Transaction(c context.Context, f func(*sql.Tx) error) error {
 	tx, err := DB.Begin()
 	if err != nil {
@@ -482,14 +491,18 @@ func Transaction(c context.Context, f func(*sql.Tx) error) error {
 		// もしdoAndRecoverでこのrecover処理（ロールバック）を実行しない場合の問題として、
 		// Go側の処理はpanicとして終了する一方、DB側ではトランザクションが仕掛り状態のまま残ってしまう。
 		// つまりロックを取得している際は、そのロックが開放されず他のトランザクションへ影響が出てしまう。
-		l.Info(c, "rollback start")
+		if DumpTransactionRollbackLog {
+			l.Info(c, "rollback start")
+		}
 		// ロールバックに失敗するケースとして、考えられるのは、
 		// ネットワークエラーやDB自体が停止している等。いずれにしても
 		// 更新内容は消失する可能性が高い。（原子性が担保されていれば許容はできる）
 		if err := tx.Rollback(); err != nil {
 			panic(err)
 		}
-		l.Info(c, "rollback end")
+		if DumpTransactionRollbackLog {
+			l.Info(c, "rollback end")
+		}
 		return err
 	}
 
