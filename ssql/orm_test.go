@@ -300,6 +300,152 @@ func TestGetDeleteSQL(t *testing.T) {
 	}
 }
 
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestGetBulkInsertSQL$ ./ssql
+func TestGetBulkInsertSQL(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        []TestStruct
+		ignores      []string
+		expected     string
+		expectedVals []any
+	}{
+		{
+			name: "multiple records",
+			input: []TestStruct{
+				{ID: 1, Name: "John", Age: 30},
+				{ID: 2, Name: "Jane", Age: 25},
+			},
+			ignores:      []string{"id", "created_at", "updated_at"},
+			expected:     `INSERT INTO test_structs ("name", "age") VALUES ($1, $2), ($3, $4)`,
+			expectedVals: []any{"John", 30, "Jane", 25},
+		},
+		{
+			name: "single record",
+			input: []TestStruct{
+				{ID: 1, Name: "John", Age: 30},
+			},
+			ignores:      []string{"id", "created_at", "updated_at"},
+			expected:     `INSERT INTO test_structs ("name", "age") VALUES ($1, $2)`,
+			expectedVals: []any{"John", 30},
+		},
+		{
+			name:         "empty array",
+			input:        []TestStruct{},
+			ignores:      []string{"id", "created_at", "updated_at"},
+			expected:     "",
+			expectedVals: nil,
+		},
+		{
+			name: "custom ignores",
+			input: []TestStruct{
+				{ID: 1, Name: "John", Age: 30},
+				{ID: 2, Name: "Jane", Age: 25},
+			},
+			ignores:      []string{"id", "age"},
+			expected:     `INSERT INTO test_structs ("name", "created_at", "updated_at") VALUES ($1, $2, $3), ($4, $5, $6)`,
+			expectedVals: []any{"John", "", "", "Jane", "", ""},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sql, values := getBulkInsertSQL(tt.input, tt.ignores)
+
+			if sql != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, sql)
+			}
+
+			if !reflect.DeepEqual(values, tt.expectedVals) {
+				t.Errorf("expected %v, got %v", tt.expectedVals, values)
+			}
+		})
+	}
+}
+
+// env `cat .env` go test -v -count=1 -timeout 60s -run ^TestInsertBulk$ ./ssql
+func TestInsertBulk(t *testing.T) {
+	refreshDB()
+
+	t.Run("success_insert_bulk", func(t *testing.T) {
+		// テスト用のデータを準備
+		testData := []TableForTest{
+			{Name: Ptr("bulk1"), UID: "bulk-1"},
+			{Name: Ptr("bulk2"), UID: "bulk-2"},
+			{Name: Ptr("bulk3"), UID: "bulk-3"},
+		}
+
+		// バルクインサートを実行
+		result, err := InsertBulk(nil, testData)
+		if err != nil {
+			t.Fatal("got error:", err)
+		}
+
+		// 挿入件数を確認
+		rows, _ := result.RowsAffected()
+		testutil.AssertEqual(t, int(rows), 3)
+
+		// データが正しく挿入されたか確認
+		findResults, err := Find(nil, &TableForTest{}, []string{"uid IN (?, ?, ?)"}, []any{"bulk-1", "bulk-2", "bulk-3"})
+		if err != nil {
+			t.Fatal("got error on find:", err)
+		}
+		testutil.AssertEqual(t, len(findResults), 3)
+
+		// 各レコードのフィールドを確認
+		uidMap := make(map[string]TableForTest)
+		for _, r := range findResults {
+			uidMap[r.UID] = r
+		}
+
+		for i, expected := range testData {
+			if record, ok := uidMap[expected.UID]; ok {
+				testutil.AssertEqual(t, *record.Name, *expected.Name)
+			} else {
+				t.Errorf("Expected record %d with UID '%s' not found", i, expected.UID)
+			}
+		}
+	})
+
+	t.Run("success_insert_bulk_with_ignores", func(t *testing.T) {
+		// テスト用のデータを準備
+		testData := []TableForTest{
+			{Name: Ptr("custom1"), UID: "custom-1"},
+			{Name: Ptr("custom2"), UID: "custom-2"},
+		}
+
+		// カスタム無視フィールドでバルクインサートを実行
+		result, err := InsertBulkWithIgnores(nil, testData, []string{"id"})
+		if err != nil {
+			t.Fatal("got error:", err)
+		}
+
+		// 挿入件数を確認
+		rows, _ := result.RowsAffected()
+		testutil.AssertEqual(t, int(rows), 2)
+
+		// データが正しく挿入されたか確認
+		findResults, err := Find(nil, &TableForTest{}, []string{"uid IN (?, ?)"}, []any{"custom-1", "custom-2"})
+		if err != nil {
+			t.Fatal("got error on find:", err)
+		}
+		testutil.AssertEqual(t, len(findResults), 2)
+	})
+
+	t.Run("empty_array", func(t *testing.T) {
+		// 空の配列でバルクインサートを実行
+		var emptyData []TableForTest
+		result, err := InsertBulk(nil, emptyData)
+
+		// エラーがなくnilの結果が返ることを確認
+		if err != nil {
+			t.Fatal("expected no error but got:", err)
+		}
+		if result != nil {
+			t.Errorf("expected nil result, got: %v", result)
+		}
+	})
+}
+
 // env `cat .env` go test -v -count=1 -timeout 60s -run ^TestORM$ ./ssql
 func TestORM(t *testing.T) {
 	refreshDB()

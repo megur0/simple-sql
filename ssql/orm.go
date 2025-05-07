@@ -181,11 +181,95 @@ func Insert(tx HasExec, s any) (sql.Result, error) {
 	return Exec(tx, sql, values...)
 }
 
+// 複数のデータを一度に挿入する。
+// id, created_at, updated_atには値はセットされず、データベース側のデフォルト値に委ねる。
+func InsertBulk[T any](tx HasExec, items []T) (sql.Result, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	sql, values := getBulkInsertSQL(items, []string{"id", "created_at", "updated_at"})
+	debugSQL(sql, values)
+	return Exec(tx, sql, values...)
+}
+
 // セットしないフィールドを明示的に指定する。
 func InsertWithIgnores(tx HasExec, s any, ignores []string) (sql.Result, error) {
 	sql, values := getInsertSQL(s, ignores)
 	debugSQL(sql, values)
 	return Exec(tx, sql, values...)
+}
+
+// 複数のデータを一度に挿入する。セットしないフィールドを明示的に指定する。
+func InsertBulkWithIgnores[T any](tx HasExec, items []T, ignores []string) (sql.Result, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	sql, values := getBulkInsertSQL(items, ignores)
+	debugSQL(sql, values)
+	return Exec(tx, sql, values...)
+}
+
+// 複数のデータを一括挿入するためのSQLを生成する
+func getBulkInsertSQL[T any](items []T, ignores []string) (string, []any) {
+	if len(items) == 0 {
+		return "", nil
+	}
+
+	// 最初の要素から構造体の型情報を取得
+	item0 := items[0]
+	rv := checkAndGetStructValue(item0)
+	rt := rv.Type()
+
+	// フィールド情報を取得
+	fields := []string{}
+	fieldIndices := []int{}
+
+	for i := 0; i < rt.NumField(); i++ {
+		fieldName := rt.Field(i).Tag.Get("database")
+		if slices.Contains(ignores, fieldName) {
+			continue
+		}
+
+		fields = append(fields, `"`+fieldName+`"`)
+		fieldIndices = append(fieldIndices, i)
+	}
+
+	// テーブル名を取得
+	tableName := toTableName(rt.Name())
+
+	// カラム部分の生成
+	query := "INSERT INTO " + tableName + " (" + strings.Join(fields, ", ") + ") VALUES "
+
+	// 値部分の生成
+	valueGroups := []string{}
+	values := []any{}
+	paramCount := 1
+
+	for _, item := range items {
+		rv := checkAndGetStructValue(item)
+
+		placeholders := []string{}
+		for _, idx := range fieldIndices {
+			placeholders = append(placeholders, "$"+strconv.Itoa(paramCount))
+			paramCount++
+
+			if rv.Field(idx).Kind() == reflect.Ptr {
+				if rv.Field(idx).IsNil() {
+					values = append(values, nil)
+				} else {
+					values = append(values, rv.Field(idx).Elem().Interface())
+				}
+			} else {
+				values = append(values, rv.Field(idx).Interface())
+			}
+		}
+
+		valueGroups = append(valueGroups, "("+strings.Join(placeholders, ", ")+")")
+	}
+
+	query += strings.Join(valueGroups, ", ")
+
+	return query, values
 }
 
 func getInsertSQL(s any, ignores []string) (string, []any) {
